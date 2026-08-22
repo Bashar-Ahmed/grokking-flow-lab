@@ -49,6 +49,22 @@ def _report(
         if grokking is not None
         else f"The run did not cross the behavioral grokking threshold by epoch {target_epoch}."
     )
+    if grokking is not None:
+        post_crossing = [row for row in history if int(row["epoch"]) >= grokking]
+        violations = [
+            row
+            for row in post_crossing
+            if row["train_accuracy"] < 0.99 or row["test_accuracy"] < 0.90
+        ]
+        minimum = min(post_crossing, key=lambda row: row["test_accuracy"])
+        stability = (
+            f"After the first crossing, {len(violations)}/{len(post_crossing)} saved "
+            "checkpoints fell below\nthe joint threshold. The lowest post-crossing test "
+            f"accuracy was {minimum['test_accuracy']:.6f}\nat epoch "
+            f"{int(minimum['epoch'])}."
+        )
+    else:
+        stability = "No post-crossing stability period exists within this horizon."
     return f"""# POST-HOC continuation report: `{run_name}`
 
 ## Evidential status
@@ -75,7 +91,7 @@ registered outcomes. The source run remains unchanged and is referenced by SHA-2
 - Test accuracy at the source checkpoint: {initial["test_accuracy"]:.6f}.
 
 The threshold is the first saved checkpoint with training accuracy at least 0.99 and
-test accuracy at least 0.90. This result is descriptive and post-hoc.
+test accuracy at least 0.90. {stability} This result is descriptive and post-hoc.
 """
 
 

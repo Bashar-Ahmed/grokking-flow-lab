@@ -215,3 +215,28 @@ summary are identical. Flow extraction was not run.
 
 The detailed post-hoc report, metrics, provenance, and checkpoint manifest are in
 `runs/posthoc/sub_frac0p25_wd1_seed1_to100000/`.
+
+## 10. Purely post-hoc 100,000-to-200,000 extension
+
+At the user's request, the same trajectory was resumed again from the isolated
+epoch-100,000 optimizer and scheduler state. The second extension is a new artifact
+whose protocol hashes and references the completed 100,000-epoch artifact. It does
+not alter the original run, the first extension, or the main-study outcome.
+
+Under the frozen first-crossing definition, the run grokked at epoch 105,000, with
+training accuracy 1.000000 and test accuracy 0.918242. Test accuracy was 0.832307 at
+104,900, rose to 0.974313 at 105,100, and first reached 1.000000 at epoch 105,400.
+Both training and test accuracy were 1.000000 at the epoch-200,000 endpoint.
+
+The post-transition trajectory was not monotonic. Of the 951 saved checkpoints at or
+after the first crossing, 15 fell below the joint 0.99/0.90 criterion. These were
+isolated one-checkpoint excursions followed by recovery at the next 100-epoch sample;
+the lowest occurred at epoch 131,000 (training 0.651942, test 0.639658), and the last
+occurred at epoch 196,300. Thus “grokked at 105,000” means the preregistered first
+crossing, not permanent threshold retention.
+
+The isolated 100,000-to-200,000 artifact contains 1,001 checkpoints at 100-epoch
+resolution, totaling 912,991,079 bytes. All checkpoint hashes passed verification,
+and the recorded pre/post hashes of the 100,000-epoch source artifact and aggregate
+main-study summary are identical. Flow extraction was not run. Detailed results are
+in `runs/posthoc/sub_frac0p25_wd1_seed1_to200000/`.
