@@ -263,4 +263,113 @@ def train_sweep(config: LabConfig, output: Path, device: str) -> list[Path]:
             }
         )
     write_csv(output / "runs.csv", rows)
+    write_behavior_report(output)
     return runs
+
+
+def write_behavior_report(output: Path) -> Path:
+    """Aggregate completed training metrics without touching flow artifacts."""
+
+    rows: list[dict[str, Any]] = []
+    for run in sorted(path for path in output.iterdir() if path.is_dir()):
+        protocol_path = run / "protocol.json"
+        metrics_path = run / "metrics.csv"
+        manifest_path = run / "checkpoint_manifest.json"
+        if not (protocol_path.exists() and metrics_path.exists() and manifest_path.exists()):
+            continue
+        protocol = json.loads(protocol_path.read_text())
+        history = _existing_history(metrics_path)
+        manifest = json.loads(manifest_path.read_text())
+        grokking_epoch = next(
+            (
+                int(row["epoch"])
+                for row in history
+                if row["train_accuracy"] >= 0.99 and row["test_accuracy"] >= 0.90
+            ),
+            None,
+        )
+        first_test_10 = next(
+            (int(row["epoch"]) for row in history if row["test_accuracy"] > 0.10),
+            None,
+        )
+        final = history[-1]
+        model = protocol["model"]
+        rows.append(
+            {
+                "run_id": run.name,
+                "operation": model["operation"],
+                "train_fraction": model["train_fraction"],
+                "weight_decay": protocol["training"]["weight_decay"],
+                "seed": model["seed"],
+                "grokking_epoch": grokking_epoch,
+                "first_test_gt_10_epoch": first_test_10,
+                "final_train_accuracy": final["train_accuracy"],
+                "final_test_accuracy": final["test_accuracy"],
+                "checkpoints": len(manifest),
+            }
+        )
+    write_csv(output / "behavior_summary.csv", rows)
+
+    grokked = [row for row in rows if row["grokking_epoch"] is not None]
+    late = [row for row in grokked if int(row["grokking_epoch"]) > 30_000]
+    by_operation = {
+        operation: (
+            sum(row["grokking_epoch"] is not None for row in rows if row["operation"] == operation),
+            sum(row["operation"] == operation for row in rows),
+        )
+        for operation in ("add", "sub", "mul")
+    }
+    table = "\n".join(
+        "| {run_id} | {grok} | {final:.3f} |".format(
+            run_id=row["run_id"],
+            grok=row["grokking_epoch"] if row["grokking_epoch"] is not None else "not reached",
+            final=row["final_test_accuracy"],
+        )
+        for row in rows
+    )
+    operation_text = ", ".join(
+        f"{operation} {passed}/{total}" for operation, (passed, total) in by_operation.items()
+    )
+    late_text = ", ".join(f"`{row['run_id']}` at {row['grokking_epoch']}" for row in late) or "none"
+    not_grokked = [row["run_id"] for row in rows if row["grokking_epoch"] is None]
+    not_grokked_text = ", ".join(f"`{name}`" for name in not_grokked) or "none"
+    report = f"""# Behavior-only training report
+
+## Scope
+
+- Nine task-specific cells: three each for addition, subtraction, and multiplication.
+- Seeds: 0, 1, and 2.
+- Training horizon: 50,000 full-batch AdamW epochs per run.
+- Checkpoint interval: every 100 epochs plus six early checkpoints.
+- Completed runs: {len(rows)}/27.
+- Saved checkpoints: {sum(int(row["checkpoints"]) for row in rows)}.
+
+No flow extraction or numbered definition was computed for this report.
+
+## Behavioral result
+
+Grokking is the first saved checkpoint with training accuracy at least 0.99 and test
+accuracy at least 0.90. Overall, {len(grokked)}/{len(rows)} runs reached this threshold.
+By operation: {operation_text}.
+
+Runs crossing the threshold only after the source study's 30,000-epoch budget:
+{late_text}.
+
+Runs not reaching the threshold by epoch 50,000: {not_grokked_text}.
+
+The extended horizon therefore distinguishes late grokking from genuine censoring at
+50,000 epochs. These are behavioral observations only; they do not establish any flow
+or mechanistic conclusion.
+
+## Per-run results
+
+| Run | First grokking checkpoint | Final test accuracy |
+|---|---:|---:|
+{table}
+
+Machine-readable values are in `behavior_summary.csv`. Per-run metrics, protocols,
+checkpoint manifests, and Markdown reports remain in each run directory.
+"""
+    report_path = output / "REPORT.md"
+    report_path.write_text(report)
+    return report_path

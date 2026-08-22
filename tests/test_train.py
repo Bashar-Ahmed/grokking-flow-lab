@@ -39,3 +39,5 @@ def test_training_writes_reloadable_checkpoints(tmp_path) -> None:
     assert final["epoch"] == 1
     assert final["model_state"]
     assert (run / "REPORT.md").exists()
+    assert (tmp_path / "behavior_summary.csv").exists()
+    assert "Behavior-only" in (tmp_path / "REPORT.md").read_text()

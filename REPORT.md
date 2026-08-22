@@ -3,7 +3,7 @@
 ## Status
 
 Repository scaffolding and implementation are complete. The nine-cell, three-seed,
-50,000-epoch behavior-only training matrix is authorized. No trained-checkpoint flow
+50,000-epoch behavior-only training matrix is complete. No trained-checkpoint flow
 extraction or numbered-definition analysis has been run.
 
 ## 1. What is being reproduced
@@ -168,3 +168,26 @@ Completed on the RTX 5060 Ti instance:
 - the unconfirmed large-run command was tested and refused execution;
 - no `flow-artifacts` directory exists, and all run protocols retain flow status
   `not_run`.
+
+## 8. Completed 50,000-epoch behavior matrix
+
+All 27 approved runs completed on 22 August 2026 in approximately two hours. Each run
+has 507 saved checkpoints, for 13,689 total. A full integrity pass recomputed SHA-256
+for every checkpoint and verified all 12,485,449,431 bytes against the manifests.
+
+Using the frozen behavioral threshold—first saved checkpoint with training accuracy
+at least 0.99 and test accuracy at least 0.90—26/27 runs grokked:
+
+- addition: 9/9;
+- subtraction: 8/9;
+- multiplication: 9/9.
+
+Two subtraction runs grokked only after the source study's 30,000-epoch budget:
+`sub_frac0p25_wd1_seed2` at epoch 43,700 and `sub_frac0p3_wd1_seed1` at epoch
+39,100. `sub_frac0p25_wd1_seed1` did not grok by epoch 50,000 and ended at 2.9%
+test accuracy despite 100% training accuracy. The extended horizon therefore separates
+late transitions from one still-censored run.
+
+The complete plain-language behavior report and machine-readable table are stored in
+`runs/selected_cells_seed0_2_epoch50000/REPORT.md` and `behavior_summary.csv`. These
+results are behavioral only. Flow status remains `not_run` for every protocol.

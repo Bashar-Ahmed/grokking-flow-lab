@@ -10,7 +10,7 @@ from pathlib import Path
 from grokking_lab.config import load_config
 from grokking_lab.definitions import summarize_raw_run
 from grokking_lab.flow import extract_run
-from grokking_lab.train import train_sweep
+from grokking_lab.train import train_sweep, write_behavior_report
 
 
 def _parser() -> argparse.ArgumentParser:
@@ -40,6 +40,9 @@ def _parser() -> argparse.ArgumentParser:
     summarize.add_argument("--raw-run", type=Path, required=True)
     summarize.add_argument("--output", type=Path, required=True)
     summarize.add_argument("--acknowledge-phase-gate", action="store_true", required=True)
+
+    behavior = commands.add_parser("report-behavior", help="aggregate completed behavior-only runs")
+    behavior.add_argument("--runs", type=Path, required=True)
 
     upload = commands.add_parser("upload", help="upload an artifact folder to HF")
     upload.add_argument("--source", type=Path, required=True)
@@ -84,6 +87,8 @@ def main(argv: list[str] | None = None) -> None:
         extract_run(args.run, args.output, args.device)
     elif args.command == "summarize":
         summarize_raw_run(args.raw_run, args.output)
+    elif args.command == "report-behavior":
+        print(write_behavior_report(args.runs))
     else:
         _upload(args)
 

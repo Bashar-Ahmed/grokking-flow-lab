@@ -10,6 +10,7 @@ candidate definitions.
 ./scripts/bootstrap.sh
 .venv/bin/grokking-lab plan --config configs/smoke.toml
 .venv/bin/grokking-lab train --config configs/smoke.toml --output runs/smoke
+.venv/bin/grokking-lab report-behavior --runs runs/smoke
 .venv/bin/pytest
 ```
 
