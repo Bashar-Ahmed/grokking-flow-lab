@@ -2,7 +2,13 @@ from __future__ import annotations
 
 import pytest
 
-from grokking_lab.definitions import Graph, compute_definitions, path_excess, safe_paths
+from grokking_lab.definitions import (
+    Graph,
+    compute_definitions,
+    graph_from_record,
+    path_excess,
+    safe_paths,
+)
 
 
 def branching_graph() -> Graph:
@@ -31,3 +37,15 @@ def test_safe_path_excess() -> None:
 def test_rejects_nonconserved_graph() -> None:
     with pytest.raises(ValueError, match="conservation"):
         Graph(3, ((0, 1), (1, 2)), (1.0, 0.5))
+
+
+def test_fixed_point_record_decodes_to_unit_flow() -> None:
+    graph = graph_from_record(
+        {
+            "flow_scale": 10_000_000,
+            "edges": [[0, 1, 6_000_000], [0, 2, 4_000_000], [1, 3, 6_000_000], [2, 3, 4_000_000]],
+        },
+        4,
+    )
+    assert graph.value == pytest.approx(1.0)
+    assert graph.values == pytest.approx((0.6, 0.4, 0.6, 0.4))

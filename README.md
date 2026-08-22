@@ -33,7 +33,10 @@ After approval, the two offline phases are:
 
 The raw format stores every edge marginal and every canonical path weight in one
 gzip JSONL record per example/checkpoint/flow kind. It is intentionally retained
-independently of derived definitions.
+independently of derived definitions. Schema version 2 normalizes stored flow to
+10,000,000 scaled units with four decimal subunits; divide by each record's
+`flow_scale` to recover conventional unit flow. Every record includes `split` as
+`train` or `test`.
 
 To upload artifacts after credentials and destination are confirmed:
 

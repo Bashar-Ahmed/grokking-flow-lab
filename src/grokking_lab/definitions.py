@@ -60,7 +60,10 @@ class Graph:
 
 def graph_from_record(record: dict[str, Any], num_nodes: int) -> Graph:
     edges = tuple((int(row[0]), int(row[1])) for row in record["edges"])
-    values = tuple(float(row[2]) for row in record["edges"])
+    scale = float(record.get("flow_scale", 1.0))
+    if scale <= 0:
+        raise ValueError("flow_scale must be positive")
+    values = tuple(float(row[2]) / scale for row in record["edges"])
     return Graph(num_nodes, edges, values)
 
 

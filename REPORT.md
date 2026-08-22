@@ -156,7 +156,7 @@ analyze a trained checkpoint and do not constitute the paused flow experiment.
 Completed on the RTX 5060 Ti instance:
 
 - lint and formatting checks passed;
-- 23 unit tests passed, including post-hoc/source isolation and exact serial/parallel
+- 26 unit tests passed, including post-hoc/source isolation and exact serial/parallel
   flow-extraction equivalence coverage;
 - smoke training completed 20 epochs for add, sub, and mul;
 - 21/21 immutable checkpoints matched their SHA-256 manifests and reloaded with
@@ -242,31 +242,34 @@ and the recorded pre/post hashes of the 100,000-epoch source artifact and aggreg
 main-study summary are identical. Flow extraction was not run. Detailed results are
 in `runs/posthoc/sub_frac0p25_wd1_seed1_to200000/`.
 
-## 11. Lossless raw-flow extraction optimization
+## 11. Bounded-error raw-flow extraction optimization
 
-The raw extractor was optimized before the full flow phase. The numerical
-decomposition, node catalog, edge aggregation, canonical-path ordering, and record
-schema are unchanged. In particular, every successful or degenerate record retains an
-explicit `split` value of `train` or `test`.
+The raw extractor was optimized before the full flow phase. The node catalog,
+edge/path topology, canonical-path ordering, and explicit `train`/`test` split labels
+are unchanged. Raw-record schema version 2 stores each flow normalized to 10,000,000
+units. Values decode to conventional unit flow by division by the per-record
+`flow_scale`. Four decimal subunits give a decoded resolution of `1e-11`, substantially
+finer than the accepted `1e-7` error bound.
 
 The optimized implementation performs one model forward pass per example and reuses
 its immutable cache across the four flow kinds. The original implementation performed
-five forward passes per example: one to choose the competitor and one inside each flow
-construction. Independent checkpoints can now be processed by multiple CPU processes;
-each worker reuses one model instance and is restricted to one PyTorch thread to avoid
-oversubscription. Output files use deterministic gzip headers, are written atomically,
-and are recorded in an incrementally updated SHA-256 manifest. Interrupted extractions
-can resume only when the existing provenance manifest exactly matches the request.
-Every source checkpoint is digest-checked before it is loaded.
+five forward passes per example. All 512 MLP-neuron decompositions are now evaluated
+with batched tensor operations and reused across target/competitor support/opposition.
+Independent checkpoints are processed by multiple single-threaded CPU workers.
+Outputs use deterministic gzip headers, atomic writes, incremental SHA-256 manifests,
+strict provenance checks, and safe resumption.
 
-Regression tests establish exact equality between cached and uncached `RawFlow`
-objects and byte-for-byte equality between serial and parallel compressed artifacts.
-A direct comparison against the pre-optimization Git version also produced exact
-edge/path equality for all 16 checked flows from four train/test examples at a real
-epoch-11,700 checkpoint.
-A real 128-width, 512-MLP benchmark measured approximately 33 records/second with one
-optimized CPU worker, versus 22 records/second previously. Twelve workers processed 60
-checkpoints at approximately 256 records/second including process startup. At that
-observed rate, the proposed 876,096-record main matrix would take roughly 57 minutes.
+The validation suite requires final vectorized edge and path weights to match the
+scalar implementation within `1e-7`; serial and parallel compressed artifacts remain
+byte-identical. Across 72 sampled flows spanning add/sub/mul, train/test, and early,
+middle, and final checkpoints, the largest storage error was `5.3e-12` for a canonical
+path and `1.5e-10` for an edge. The largest induced change among the four numbered
+calculations was `4.8e-8`.
+
+A real 128-width, 512-MLP benchmark measured approximately 60 records/second with one
+CPU worker and 438 records/second across 12 workers, including process startup. The
+original extractor measured 22 records/second. At the observed parallel rate, the
+proposed 876,096-record matrix would take roughly 33 minutes. A 60-checkpoint sample
+averaged 1.28 MB compressed per checkpoint, projecting about 16.3 GiB for the matrix.
 Benchmark outputs were temporary and deleted. No full raw-flow extraction or numbered
 definition calculation was run as part of this optimization.

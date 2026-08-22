@@ -31,6 +31,8 @@ FLOW_KINDS = (
     "competitor_support",
     "competitor_oppose",
 )
+FLOW_SCALE = 10_000_000
+FLOW_STORAGE_FACTOR = 10_000
 
 
 class DegenerateFlowError(ValueError):
@@ -56,6 +58,70 @@ class RawFlow:
             (abs(incoming[node] - outgoing[node]) for node in range(1, len(incoming) - 1)),
             default=0.0,
         )
+
+
+@dataclass(frozen=True)
+class NeuronDecomposition:
+    """Flow-kind-independent downstream probabilities for all MLP neurons."""
+
+    component_probabilities: list[list[float]]
+    component_totals: list[float]
+    residual_input_probabilities: list[list[float]]
+    residual_input_totals: list[float]
+    head_input_probabilities: list[list[list[list[float]]]]
+    head_input_totals: list[list[float]]
+
+
+def _normalized_rows(values: Tensor) -> tuple[Tensor, Tensor]:
+    positive = values.clamp_min(0)
+    totals = positive.sum(dim=-1)
+    denominators = torch.where(totals > 0, totals, torch.ones_like(totals))
+    return positive / denominators[..., None], totals
+
+
+@torch.inference_mode()
+def _prepare_neuron_decomposition(
+    model: Transformer, cache: ForwardCache, attention_parts: Tensor
+) -> NeuronDecomposition:
+    """Vectorize every downstream MLP-neuron decomposition for one example."""
+
+    residual_pre = cache.residual_pre[0, -1]
+    head_outputs = cache.head_output[0, :, -1]
+    component_values = torch.cat(
+        (
+            torch.einsum("d,md->m", residual_pre, model.W_in)[:, None],
+            torch.einsum("hd,md->mh", head_outputs, model.W_in),
+            model.b_in[:, None],
+        ),
+        dim=1,
+    )
+    component_probabilities, component_totals = _normalized_rows(component_values)
+
+    token_parts = cache.token_embedding[0, -1]
+    position_parts = cache.position_embedding[0, -1]
+    residual_input_values = torch.stack(
+        (
+            torch.einsum("d,md->m", token_parts, model.W_in),
+            torch.einsum("d,md->m", position_parts, model.W_in),
+        ),
+        dim=1,
+    )
+    residual_input_probabilities, residual_input_totals = _normalized_rows(residual_input_values)
+
+    head_input_values = torch.einsum("hpkd,md->mhpk", attention_parts, model.W_in)
+    shape = head_input_values.shape
+    flattened = head_input_values.reshape(shape[0], shape[1], -1)
+    flattened_probabilities, head_input_totals = _normalized_rows(flattened)
+    head_input_probabilities = flattened_probabilities.reshape(shape)
+
+    return NeuronDecomposition(
+        component_probabilities=component_probabilities.cpu().tolist(),
+        component_totals=component_totals.cpu().tolist(),
+        residual_input_probabilities=residual_input_probabilities.cpu().tolist(),
+        residual_input_totals=residual_input_totals.cpu().tolist(),
+        head_input_probabilities=head_input_probabilities.cpu().tolist(),
+        head_input_totals=head_input_totals.cpu().tolist(),
+    )
 
 
 def node_catalog(model: Transformer) -> tuple[tuple[str, ...], dict[str, int]]:
@@ -119,6 +185,7 @@ def _build_raw_flow_cached(
     tolerance: float = 1e-12,
     attention_parts: Tensor | None = None,
     catalog: tuple[tuple[str, ...], dict[str, int]] | None = None,
+    neuron_decomposition: NeuronDecomposition | None = None,
 ) -> RawFlow:
     """Build a flow from a shared forward cache without changing the decomposition."""
 
@@ -152,6 +219,8 @@ def _build_raw_flow_cached(
     position_parts = cache.position_embedding[0]
     if attention_parts is None:
         attention_parts = attention_input_parts(model, cache)[0]
+    if neuron_decomposition is None:
+        neuron_decomposition = _prepare_neuron_decomposition(model, cache, attention_parts)
     head_outputs = cache.head_output[0, :, -1]
 
     def add_input(
@@ -216,34 +285,63 @@ def _build_raw_flow_cached(
         root_mass = float(root_distribution[neuron + 1])
         if root_mass <= tolerance:
             continue
+        if neuron_decomposition.component_totals[neuron] <= tolerance:
+            raise DegenerateFlowError("positive local decomposition is empty")
         root = f"root:mlp_neuron:{neuron}"
-        direction = model.W_in[neuron]
-        contributions = torch.cat(
-            (
-                torch.dot(cache.residual_pre[0, -1], direction)[None],
-                torch.einsum("hd,d->h", head_outputs, direction),
-                model.b_in[neuron][None],
-            )
-        )
-        probabilities = _distribution(contributions, tolerance)
-        residual_mass = root_mass * float(probabilities[0])
+        probabilities = neuron_decomposition.component_probabilities[neuron]
+        residual_mass = root_mass * probabilities[0]
         if residual_mass > tolerance:
-            add_input(
-                (source, root, "component:residual_pre"),
-                residual_mass,
-                torch.stack(
+            if neuron_decomposition.residual_input_totals[neuron] <= tolerance:
+                raise DegenerateFlowError("positive local decomposition is empty")
+            for input_kind, probability in enumerate(
+                neuron_decomposition.residual_input_probabilities[neuron]
+            ):
+                weight = residual_mass * probability
+                if weight <= tolerance:
+                    continue
+                name = "token_embedding" if input_kind == 0 else "position_embedding"
+                semantic_paths.append(
                     (
-                        torch.dot(token_parts[-1], direction),
-                        torch.dot(position_parts[-1], direction),
+                        (
+                            source,
+                            root,
+                            "component:residual_pre",
+                            "input_position:2",
+                            f"input:{name}:2",
+                            sink,
+                        ),
+                        weight,
                     )
-                ),
-                2,
-            )
+                )
         for head in range(model.config.num_heads):
-            mass = root_mass * float(probabilities[head + 1])
-            if mass > tolerance:
-                add_head((source, root), mass, head, direction)
-        bias_mass = root_mass * float(probabilities[-1])
+            mass = root_mass * probabilities[head + 1]
+            if mass <= tolerance:
+                continue
+            if neuron_decomposition.head_input_totals[neuron][head] <= tolerance:
+                raise DegenerateFlowError("positive local decomposition is empty")
+            for position in range(3):
+                for input_kind in range(2):
+                    probability = neuron_decomposition.head_input_probabilities[neuron][head][
+                        position
+                    ][input_kind]
+                    weight = mass * probability
+                    if weight <= tolerance:
+                        continue
+                    name = "token_embedding" if input_kind == 0 else "position_embedding"
+                    semantic_paths.append(
+                        (
+                            (
+                                source,
+                                root,
+                                f"component:attention_head:{head}",
+                                f"input_position:{position}",
+                                f"input:{name}:{position}",
+                                sink,
+                            ),
+                            weight,
+                        )
+                    )
+        bias_mass = root_mass * probabilities[-1]
         if bias_mass > tolerance:
             semantic_paths.append(
                 ((source, root, "component:mlp_input_bias", "input:bias", sink), bias_mass)
@@ -281,8 +379,34 @@ def _record(
     split: str,
     operands: list[int],
 ) -> dict[str, Any]:
+    path_values = [max(0.0, weight) for _, weight in flow.paths]
+    total = sum(path_values)
+    storage_scale = FLOW_SCALE * FLOW_STORAGE_FACTOR
+    exact_subunits = [weight * storage_scale / total for weight in path_values]
+    path_subunits = [math.floor(value) for value in exact_subunits]
+    remainder = storage_scale - sum(path_subunits)
+    if not 0 <= remainder <= len(path_subunits):
+        raise AssertionError("scaled-path rounding remainder is outside its valid range")
+    order = sorted(
+        range(len(path_subunits)),
+        key=lambda index: (exact_subunits[index] - path_subunits[index], -index),
+        reverse=True,
+    )
+    for index in order[:remainder]:
+        path_subunits[index] += 1
+    if sum(path_subunits) != storage_scale:
+        raise AssertionError("scaled canonical paths do not sum to the storage scale")
+
+    edge_subunits: dict[tuple[int, int], int] = {}
+    for (path, _), subunits in zip(flow.paths, path_subunits, strict=True):
+        for edge in pairwise(path):
+            edge_subunits[edge] = edge_subunits.get(edge, 0) + subunits
+    edges = [
+        [tail, head, subunits / FLOW_STORAGE_FACTOR]
+        for (tail, head), subunits in sorted(edge_subunits.items())
+    ]
     return {
-        "schema_version": 1,
+        "schema_version": 2,
         "run_id": run_id,
         "epoch": epoch,
         "example_index": example_index,
@@ -292,9 +416,14 @@ def _record(
         "competitor": flow.competitor,
         "flow_kind": flow.kind,
         "status": "ok",
-        "conservation_error": flow.conservation_error(),
-        "edges": [[tail, head, value] for tail, head, value in flow.edges],
-        "canonical_paths": [[list(path), weight] for path, weight in flow.paths],
+        "flow_scale": FLOW_SCALE,
+        "storage_subunits_per_unit": FLOW_STORAGE_FACTOR,
+        "conservation_error_units": 0,
+        "edges": edges,
+        "canonical_paths": [
+            [list(path), subunits / FLOW_STORAGE_FACTOR]
+            for (path, _), subunits in zip(flow.paths, path_subunits, strict=True)
+        ],
     }
 
 
@@ -388,6 +517,9 @@ def _extract_checkpoint(checkpoint_row: dict[str, Any]) -> dict[str, Any]:
         competitor = int(candidates.argmax())
         operands = [int(value) for value in tokens[:2].cpu()]
         shared_attention_parts = attention_input_parts(_WORKER_MODEL, cache)[0]
+        neuron_decomposition = _prepare_neuron_decomposition(
+            _WORKER_MODEL, cache, shared_attention_parts
+        )
         for kind in _WORKER_KINDS:
             try:
                 flow = _build_raw_flow_cached(
@@ -398,11 +530,12 @@ def _extract_checkpoint(checkpoint_row: dict[str, Any]) -> dict[str, Any]:
                     competitor,
                     attention_parts=shared_attention_parts,
                     catalog=_WORKER_CATALOG,
+                    neuron_decomposition=neuron_decomposition,
                 )
                 row = _record(flow, _WORKER_RUN_ID, epoch, example_index, split, operands)
             except DegenerateFlowError as error:
                 row = {
-                    "schema_version": 1,
+                    "schema_version": 2,
                     "run_id": _WORKER_RUN_ID,
                     "epoch": epoch,
                     "example_index": example_index,
@@ -412,6 +545,8 @@ def _extract_checkpoint(checkpoint_row: dict[str, Any]) -> dict[str, Any]:
                     "competitor": competitor,
                     "flow_kind": kind,
                     "status": "degenerate",
+                    "flow_scale": FLOW_SCALE,
+                    "storage_subunits_per_unit": FLOW_STORAGE_FACTOR,
                     "error": str(error),
                 }
             rows.append(row)
@@ -467,13 +602,21 @@ def extract_run(
     labels, _ = node_catalog(Transformer(model_config))
     extraction_manifest = {
         "schema_version": 2,
-        "raw_record_schema_version": 1,
+        "raw_record_schema_version": 2,
         "run_id": run_dir.name,
         "source_protocol_sha256": sha256(run_dir / "protocol.json"),
         "source_checkpoint_manifest_sha256": sha256(checkpoint_manifest_path),
         "node_labels": list(labels),
         "selected_examples": [{"index": index, "split": split} for index, split in selected],
         "flow_kinds": list(kinds),
+        "flow_encoding": {
+            "kind": "scaled_fixed_point",
+            "scale": FLOW_SCALE,
+            "storage_subunits_per_unit": FLOW_STORAGE_FACTOR,
+            "decoded_resolution": 1 / (FLOW_SCALE * FLOW_STORAGE_FACTOR),
+            "normalization_units": FLOW_SCALE,
+            "maximum_accepted_decoded_error": 1e-7,
+        },
         "records_per_checkpoint": len(selected) * len(kinds),
         "compression": {"format": "gzip", "level": compression_level, "mtime": 0},
         "storage": "one gzip JSONL file per checkpoint; raw edge marginals and canonical paths",
