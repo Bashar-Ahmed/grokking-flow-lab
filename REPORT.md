@@ -2,10 +2,9 @@
 
 ## Status
 
-Repository scaffolding and implementation are complete. A three-operation smoke
-training run is the only authorized execution at this stage. Full-size training is
-scale-gated, and no trained-checkpoint flow extraction or numbered-definition analysis
-has been run.
+Repository scaffolding and implementation are complete. The nine-cell, three-seed,
+50,000-epoch behavior-only training matrix is authorized. No trained-checkpoint flow
+extraction or numbered-definition analysis has been run.
 
 ## 1. What is being reproduced
 
@@ -134,18 +133,13 @@ The compact anchor matrix in `configs/anchor_template.toml` is:
 - eight fixed train and eight fixed test examples, four flow kinds, yielding 294,720
   raw graphs if every checkpoint is analyzed.
 
-This increases seed count from three to five per selected cell and temporal resolution
-from 250 to 100 epochs. The exact selected-cell reproduction in
-`configs/scale_template.toml` uses the nine source-study cells and five seeds: 45 runs,
-1,350,000 optimizer steps, 13,815 checkpoints (about 11.7 GiB of weights before
-serialization overhead), and 884,160 possible raw graphs. Repeating the complete 3x3
-hyperparameter grid would be larger still and should be budgeted separately.
+The approved selected-cell reproduction in `configs/scale_template.toml` uses the nine
+source-study cells, seeds 0--2, and 50,000 epochs: 27 runs, 1,350,000 optimizer steps,
+13,689 checkpoints (about 11.6 GiB of weights before serialization overhead), and
+876,096 possible raw graphs. This keeps the finer 100-epoch temporal resolution.
 
-Before full training, confirm one of these scopes:
-
-- anchor: 15 runs above;
-- expanded: add selected weight-decay/train-fraction cells after a behavioral pilot;
-- custom: a different seed count, checkpoint interval, modulus, or epoch budget.
+The 27-run training scope was approved on 22 August 2026. Flow extraction remains a
+separate unapproved phase.
 
 Before the flow phase, separately confirm checkpoint subset, examples per split, and
 the Hugging Face dataset destination. `/workspace` is not volume-backed on this

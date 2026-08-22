@@ -14,8 +14,8 @@ def test_smoke_matrix_and_checkpoints() -> None:
 
 def test_scale_template_has_more_seeds_and_resolution() -> None:
     config = load_config(ROOT / "configs/scale_template.toml")
-    assert config.num_runs == 45
-    assert len(config.checkpoint_epochs) == 307
+    assert config.num_runs == 27
+    assert len(config.checkpoint_epochs) == 507
     assert config.plan()["optimizer_steps"] == 1_350_000
 
 

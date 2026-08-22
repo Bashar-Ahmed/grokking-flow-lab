@@ -1,7 +1,6 @@
-# Exact nine cells from the source study, expanded from three to five seeds.
-# This file is a proposal, not authorization to run.
+# Approved exact nine-cell training scope: three seeds and 50,000 epochs.
 [experiment]
-seeds = [0, 1, 2, 3, 4]
+seeds = [0, 1, 2]
 
 [[experiment.cells]]
 operation = "add"
@@ -55,7 +54,7 @@ num_heads = 4
 d_mlp = 512
 
 [training]
-epochs = 30000
+epochs = 50000
 learning_rate = 0.001
 warmup_steps = 10
 evaluation_batch_size = 4096
