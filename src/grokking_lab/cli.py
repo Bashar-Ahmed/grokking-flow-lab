@@ -10,6 +10,7 @@ from pathlib import Path
 from grokking_lab.config import load_config
 from grokking_lab.definitions import summarize_raw_run
 from grokking_lab.flow import extract_run
+from grokking_lab.posthoc import extend_run
 from grokking_lab.train import train_sweep, write_behavior_report
 
 
@@ -43,6 +44,16 @@ def _parser() -> argparse.ArgumentParser:
 
     behavior = commands.add_parser("report-behavior", help="aggregate completed behavior-only runs")
     behavior.add_argument("--runs", type=Path, required=True)
+
+    posthoc = commands.add_parser(
+        "posthoc-extend", help="resume one run in a separate post-hoc artifact"
+    )
+    posthoc.add_argument("--source-run", type=Path, required=True)
+    posthoc.add_argument("--output", type=Path, required=True)
+    posthoc.add_argument("--target-epoch", type=int, required=True)
+    posthoc.add_argument("--checkpoint-every", type=int, default=100)
+    posthoc.add_argument("--device", default="auto")
+    posthoc.add_argument("--acknowledge-posthoc", action="store_true", required=True)
 
     upload = commands.add_parser("upload", help="upload an artifact folder to HF")
     upload.add_argument("--source", type=Path, required=True)
@@ -89,6 +100,16 @@ def main(argv: list[str] | None = None) -> None:
         summarize_raw_run(args.raw_run, args.output)
     elif args.command == "report-behavior":
         print(write_behavior_report(args.runs))
+    elif args.command == "posthoc-extend":
+        print(
+            extend_run(
+                args.source_run,
+                args.output,
+                args.target_epoch,
+                args.checkpoint_every,
+                args.device,
+            )
+        )
     else:
         _upload(args)
 
