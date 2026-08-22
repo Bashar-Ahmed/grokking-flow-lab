@@ -49,6 +49,17 @@ export HF_TOKEN=...
 The uploader creates private repositories by default. See [REPORT.md](REPORT.md)
 for the experiment rationale, findings being reproduced, limitations, and scale gate.
 
+Aligned train/test plots for every numbered definition can be generated after raw
+extraction with:
+
+```bash
+uv pip install --python .venv/bin/python -e '.[plot]'
+.venv/bin/python scripts/plot_aligned_definitions.py \
+  --raw-root flow-artifacts/raw-main-50k \
+  --behavior-summary runs/selected_cells_seed0_2_epoch50000/behavior_summary.csv \
+  --output flow-artifacts/definition-aligned-plots --workers 12 --resume
+```
+
 ## Repository map
 
 ```text
