@@ -26,6 +26,13 @@ def test_definition_01_on_known_junction() -> None:
     assert values["definition_04"] >= 1
 
 
+def test_definition_05_is_definition_04_without_length_weighting() -> None:
+    values = compute_definitions(branching_graph())
+    assert values["definition_04"] == pytest.approx(5.8)
+    assert values["definition_05"] == pytest.approx(2.6)
+    assert 1 <= values["definition_05"] < values["definition_04"]
+
+
 def test_safe_path_excess() -> None:
     graph = branching_graph()
     # Edges 2 and 4 carry at least 0.3 together: 0.6 + 0.7 - 1.0.

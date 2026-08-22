@@ -203,12 +203,19 @@ def definition_04(graph: Graph) -> float:
     return (graph.value + sum(path_excess(graph, path) * len(path) for path in paths)) / graph.value
 
 
+def definition_05(graph: Graph) -> float:
+    nodes = _eligible_nodes(graph)
+    paths = [path for path in safe_paths(graph) if _eligible_path(graph, path, nodes)]
+    return (graph.value + sum(path_excess(graph, path) for path in paths)) / graph.value
+
+
 def compute_definitions(graph: Graph) -> dict[str, float]:
     return {
         "definition_01": definition_01(graph),
         "definition_02": definition_02(graph),
         "definition_03": definition_03(graph),
         "definition_04": definition_04(graph),
+        "definition_05": definition_05(graph),
     }
 
 
@@ -258,6 +265,7 @@ def summarize_raw_run(raw_run_dir: Path, output_dir: Path) -> Path:
                         "definition_02",
                         "definition_03",
                         "definition_04",
+                        "definition_05",
                     )
                 },
             }
@@ -295,6 +303,12 @@ conservative lower bound for the selected union.
 Start with source flow, then add each eligible path's lower bound multiplied by its
 edge length, and divide by source flow. Nested and overlapping paths both contribute;
 this is an integral, not a union-mass bound.
+
+## Definition-05
+
+Start with source flow, then add each eligible path's lower bound without multiplying
+by edge length, and divide by source flow. It uses exactly the same eligible paths as
+Definition-04; nested and overlapping paths still both contribute.
 
 The names are intentionally numbered. Comparative evidence should determine which,
 if any, deserves a semantic label.

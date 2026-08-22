@@ -79,7 +79,7 @@ Training is isolated from interpretation:
    positive support/opposition for the target and strongest competitor. It stores raw
    edge marginals and canonical path weights before any candidate definition is used.
 4. `summarize` reads only those raw records and computes `Definition-01` through
-   `Definition-04`. This means later definitions can be added without retraining or
+   `Definition-05`. This means later definitions can be added without retraining or
    rerunning model attribution.
 
 Checkpoints contain weights and behavior metrics. A single `latest.pt` additionally
@@ -118,6 +118,13 @@ is a conservative lower bound for the selected union.
 Start with source flow; for every eligible path, add its lower bound times edge length;
 then divide by source flow. Nested and overlapping paths both contribute, so this is an
 integral rather than a union-mass lower bound.
+
+### Definition-05
+
+Start with source flow; for every eligible path, add its lower bound without
+multiplying by edge length, then divide by source flow. The eligible paths and all
+other terms are identical to Definition-04. Nested and overlapping paths both
+contribute.
 
 All result columns retain only the numbered identifiers.
 
@@ -266,7 +273,7 @@ scalar implementation within `1e-7`; serial and parallel compressed artifacts re
 byte-identical. Across 72 sampled flows spanning add/sub/mul, train/test, and early,
 middle, and final checkpoints, the largest storage error was `5.3e-12` for a canonical
 path and `1.5e-10` for an edge. The largest induced change among the four numbered
-calculations was `4.8e-8`.
+calculations that existed during that benchmark was `4.8e-8`.
 
 A real 128-width, 512-MLP benchmark measured approximately 60 records/second with one
 CPU worker and 438 records/second across 12 workers, including process startup. The
