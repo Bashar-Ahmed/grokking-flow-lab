@@ -1,0 +1,25 @@
+[experiment]
+operations = ["add", "sub", "mul"]
+seeds = [0]
+train_fractions = [0.30]
+weight_decays = [1.0]
+
+[model]
+p = 13
+d_model = 32
+num_heads = 4
+d_mlp = 64
+
+[training]
+epochs = 20
+learning_rate = 0.001
+warmup_steps = 10
+evaluation_batch_size = 4096
+
+[checkpointing]
+every = 5
+include = [0, 1, 2, 10, 20]
+
+[flow]
+examples_per_split = 2
+kinds = ["target_support", "target_oppose", "competitor_support", "competitor_oppose"]

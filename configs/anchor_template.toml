@@ -1,0 +1,26 @@
+# Smallest canonical comparison: one hyperparameter cell, five seeds, three operations.
+[experiment]
+operations = ["add", "sub", "mul"]
+seeds = [0, 1, 2, 3, 4]
+train_fractions = [0.30]
+weight_decays = [1.0]
+
+[model]
+p = 113
+d_model = 128
+num_heads = 4
+d_mlp = 512
+
+[training]
+epochs = 30000
+learning_rate = 0.001
+warmup_steps = 10
+evaluation_batch_size = 4096
+
+[checkpointing]
+every = 100
+include = [0, 1, 2, 5, 10, 20, 50]
+
+[flow]
+examples_per_split = 8
+kinds = ["target_support", "target_oppose", "competitor_support", "competitor_oppose"]
