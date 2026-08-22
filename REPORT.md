@@ -303,3 +303,29 @@ assignment, record completeness, scale, path/source/sink normalization, edge top
 nonnegativity, and internal conservation. The extraction took approximately 26
 minutes. The detailed Markdown report and machine-readable audit are in
 `flow-artifacts/raw-main-50k/REPORT.md` and `AUDIT.json`.
+
+## 13. Train/test aligned numbered-definition plots
+
+Definition-01 through Definition-05 were evaluated on the main-study raw flows within
+±5,000 epochs of behavioral grokking. Twenty-six runs have a main-study grokking epoch
+and are aligned; `sub_frac0p25_wd1_seed1` is excluded because it did not grok within
+50,000 epochs. Its post-hoc continuation is not mixed into this analysis.
+
+The analysis covers 2,292 checkpoint files, 146,665 valid raw graphs, and 23 explicit
+degenerate graphs. It produces separate train and test trajectories: solid/darker
+lines are training examples and dashed/lighter lines are test examples. Each of the
+five figures retains the source layout of addition, subtraction, and multiplication
+panels, thin run traces, thick operation/split means, 95% mean-confidence bands, and a
+shared y-axis across operations.
+
+Definition-03 is the only candidate whose available-run mean rises from −5,000 to
++5,000 epochs for both train and test examples across all three operations. The other
+four candidates are task-dependent over the same window. Train and test agree on the
+direction of the pre-to-post change in all 15 definition/operation comparisons. These
+are descriptive aligned trajectories, not a causal result or a newly registered
+universality test.
+
+Five PNG/PDF pairs, per-graph values, split-specific trajectory data, endpoint means,
+and a detailed Markdown report are stored in
+`flow-artifacts/definition-aligned-plots/`. The initial full computation and plotting
+took 38.2 minutes with 12 CPU workers.

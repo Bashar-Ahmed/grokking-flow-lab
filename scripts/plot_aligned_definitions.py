@@ -196,7 +196,7 @@ def _plot(rows: list[dict[str, Any]], output: Path) -> list[str]:
     )
     stems = []
     for definition in DEFINITIONS:
-        fig, axes = plt.subplots(1, 3, figsize=(10.4, 3.55), sharex=True)
+        fig, axes = plt.subplots(1, 3, figsize=(10.4, 3.55), sharex=True, sharey=True)
         for axis, operation in zip(axes, ("add", "sub", "mul"), strict=True):
             operation_rows = [row for row in rows if row["operation"] == operation]
             for split in ("train", "test"):
@@ -252,8 +252,8 @@ def _plot(rows: list[dict[str, Any]], output: Path) -> list[str]:
             axis.set_title(TITLES[operation])
             axis.set_xlabel("Epoch relative to grokking, G (thousands)")
             axis.set_xlim(-5, 5)
-            axis.set_ylim(bottom=0)
             axis.grid(axis="y", color="#E3E6EA", linewidth=0.6)
+        axes[0].set_ylim(bottom=0)
         axes[0].set_ylabel(f"{definition.replace('_', '-').title()} value")
         legend = [
             Line2D([0], [0], color="#333333", linewidth=2.2, linestyle="-", label="Train"),
@@ -283,11 +283,44 @@ def _plot(rows: list[dict[str, Any]], output: Path) -> list[str]:
     return stems
 
 
+def _endpoint_summary(
+    rows: list[dict[str, Any]], output: Path, window: int
+) -> list[dict[str, Any]]:
+    result = []
+    for definition in DEFINITIONS:
+        for operation in ("add", "sub", "mul"):
+            for split in ("train", "test"):
+                row: dict[str, Any] = {
+                    "definition": definition,
+                    "operation": operation,
+                    "split": split,
+                }
+                for label, relative_epoch in (("pre", -window), ("g", 0), ("post", window)):
+                    values = [
+                        float(candidate[definition])
+                        for candidate in rows
+                        if candidate["operation"] == operation
+                        and candidate["split"] == split
+                        and int(candidate["relative_epoch"]) == relative_epoch
+                    ]
+                    row[f"{label}_relative_epoch"] = relative_epoch
+                    row[f"{label}_n_runs"] = len(values)
+                    row[f"{label}_mean"] = float(np.mean(values)) if values else math.nan
+                result.append(row)
+    path = output / "endpoint_summary.csv"
+    with path.open("w", newline="") as handle:
+        writer = csv.DictWriter(handle, fieldnames=list(result[0]))
+        writer.writeheader()
+        writer.writerows(result)
+    return result
+
+
 def _report(
     output: Path,
     protocol: dict[str, Any],
     files: list[dict[str, Any]],
     rows: list[dict[str, Any]],
+    endpoints: list[dict[str, Any]],
     stems: list[str],
     elapsed: float,
 ) -> None:
@@ -297,6 +330,24 @@ def _report(
         f"- [{stem}.png]({stem}.png) and [{stem}.pdf]({stem}.pdf)" for stem in stems
     )
     excluded = ", ".join(f"`{run_id}`" for run_id in protocol["excluded_runs"])
+    endpoint_of = {(row["definition"], row["operation"], row["split"]): row for row in endpoints}
+    consistently_increasing = []
+    direction_agreements = 0
+    direction_comparisons = 0
+    for definition in DEFINITIONS:
+        all_increase = True
+        for operation in ("add", "sub", "mul"):
+            directions = []
+            for split in ("train", "test"):
+                endpoint = endpoint_of[(definition, operation, split)]
+                delta = float(endpoint["post_mean"]) - float(endpoint["pre_mean"])
+                directions.append(math.copysign(1, delta) if delta else 0)
+            direction_comparisons += 1
+            direction_agreements += int(directions[0] == directions[1])
+            all_increase &= directions == [1, 1]
+        if all_increase:
+            consistently_increasing.append(definition.replace("_", "-").title())
+    increasing_text = ", ".join(consistently_increasing) or "none"
     (output / "REPORT.md").write_text(
         f"""# Aligned numbered-definition trajectories
 
@@ -327,6 +378,21 @@ intervals across available runs at each relative epoch.
 
 {figures}
 
+## Descriptive findings
+
+- {increasing_text} is the only candidate whose available-run mean increases from
+  −{protocol["window_epochs"] // 1000}k to +{protocol["window_epochs"] // 1000}k for both
+  train and test examples in all three operations.
+- Train and test agree on the direction of that pre-to-post change in
+  {direction_agreements}/{direction_comparisons} definition/operation comparisons.
+- The other candidates are task-dependent over this window rather than showing a
+  shared increasing trajectory across addition, subtraction, and multiplication.
+
+`endpoint_summary.csv` contains the train/test means and available-run counts at
+−{protocol["window_epochs"] // 1000}k, G, and +{protocol["window_epochs"] // 1000}k. Far-left
+counts are smaller for fast-grokking runs whose histories do not extend the full
+window before G. Confidence intervals are descriptive because runs share cell structure.
+
 Per-graph values are stored under `per-record/`; `aligned_trajectories.csv` contains
 the split-specific run/checkpoint means. This analysis does not assign semantic names
 to any candidate definition.
@@ -344,6 +410,10 @@ def main() -> None:
     parser.add_argument("--resume", action="store_true")
     args = parser.parse_args()
     started = time.perf_counter()
+    previous_elapsed = 0.0
+    previous_result_path = args.output / "RESULT.json"
+    if args.resume and previous_result_path.exists():
+        previous_elapsed = float(json.loads(previous_result_path.read_text())["elapsed_seconds"])
     args.output.mkdir(parents=True, exist_ok=True)
     tasks, excluded = _tasks(args.raw_root, args.behavior_summary, args.output, args.window)
     protocol = {
@@ -391,8 +461,9 @@ def main() -> None:
         raise AssertionError("definition computation ended with missing checkpoints")
     files = [completed[key] for key in sorted(completed)]
     rows = _aggregate(args.output, files)
+    endpoints = _endpoint_summary(rows, args.output, args.window)
     stems = _plot(rows, args.output)
-    elapsed = time.perf_counter() - started
+    elapsed = max(previous_elapsed, time.perf_counter() - started)
     result = {
         "schema_version": 1,
         "status": "passed",
@@ -404,7 +475,27 @@ def main() -> None:
         "elapsed_seconds": elapsed,
     }
     write_json(args.output / "RESULT.json", result)
-    _report(args.output, protocol, files, rows, stems, elapsed)
+    _report(args.output, protocol, files, rows, endpoints, stems, elapsed)
+    artifact_names = [
+        "protocol.json",
+        "files.json",
+        "RESULT.json",
+        "REPORT.md",
+        "aligned_trajectories.csv",
+        "endpoint_summary.csv",
+        *[f"{stem}.{extension}" for stem in stems for extension in ("png", "pdf")],
+    ]
+    write_json(
+        args.output / "OUTPUT_MANIFEST.json",
+        [
+            {
+                "path": name,
+                "bytes": (args.output / name).stat().st_size,
+                "sha256": sha256(args.output / name),
+            }
+            for name in artifact_names
+        ],
+    )
     print(json.dumps(result, sort_keys=True), flush=True)
 
 
