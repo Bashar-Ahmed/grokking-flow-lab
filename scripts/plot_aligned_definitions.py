@@ -320,6 +320,7 @@ def _report(
     protocol: dict[str, Any],
     files: list[dict[str, Any]],
     rows: list[dict[str, Any]],
+    plot_rows: list[dict[str, Any]],
     endpoints: list[dict[str, Any]],
     stems: list[str],
     elapsed: float,
@@ -365,7 +366,9 @@ Every run/checkpoint is averaged separately over the valid raw graphs selected f
 training examples and test examples. Solid/darker lines represent train examples;
 dashed/lighter lines represent test examples. Thin lines are individual runs, thick
 lines are operation/split means, and bands are descriptive 95% mean confidence
-intervals across available runs at each relative epoch.
+intervals across available runs at each relative epoch. To remove initialization
+transients from the aligned curves, plotted and summarized checkpoints have source
+epoch strictly greater than {protocol["source_epoch_exclusive_min"]:,}.
 
 ## Scale and outputs
 
@@ -373,6 +376,7 @@ intervals across available runs at each relative epoch.
 - Valid per-graph definition rows: {ok:,}.
 - Explicit degenerate rows excluded from numeric means: {degenerate:,}.
 - Aggregated run/epoch/split rows: {len(rows):,}.
+- Plotted run/epoch/split rows after the source-epoch filter: {len(plot_rows):,}.
 - Definitions: Definition-01 through Definition-05.
 - Computation and plotting runtime: {elapsed / 60:.1f} minutes.
 
@@ -407,6 +411,7 @@ def main() -> None:
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--workers", type=int, default=12)
     parser.add_argument("--window", type=int, default=5000)
+    parser.add_argument("--min-source-epoch-exclusive", type=int, default=100)
     parser.add_argument("--resume", action="store_true")
     args = parser.parse_args()
     started = time.perf_counter()
@@ -421,6 +426,7 @@ def main() -> None:
         "analysis": "aligned_numbered_definitions_train_test",
         "definitions": list(DEFINITIONS),
         "window_epochs": args.window,
+        "source_epoch_exclusive_min": args.min_source_epoch_exclusive,
         "included_runs": len({task["run_id"] for task in tasks}),
         "excluded_runs": excluded,
         "expected_checkpoint_files": len(tasks),
@@ -461,8 +467,9 @@ def main() -> None:
         raise AssertionError("definition computation ended with missing checkpoints")
     files = [completed[key] for key in sorted(completed)]
     rows = _aggregate(args.output, files)
-    endpoints = _endpoint_summary(rows, args.output, args.window)
-    stems = _plot(rows, args.output)
+    plot_rows = [row for row in rows if int(row["epoch"]) > args.min_source_epoch_exclusive]
+    endpoints = _endpoint_summary(plot_rows, args.output, args.window)
+    stems = _plot(plot_rows, args.output)
     elapsed = max(previous_elapsed, time.perf_counter() - started)
     result = {
         "schema_version": 1,
@@ -471,11 +478,13 @@ def main() -> None:
         "valid_records": sum(int(row["ok"]) for row in files),
         "degenerate_records": sum(int(row["degenerate"]) for row in files),
         "aggregated_rows": len(rows),
+        "plotted_aggregated_rows": len(plot_rows),
+        "source_epoch_exclusive_min": args.min_source_epoch_exclusive,
         "figures": stems,
         "elapsed_seconds": elapsed,
     }
     write_json(args.output / "RESULT.json", result)
-    _report(args.output, protocol, files, rows, endpoints, stems, elapsed)
+    _report(args.output, protocol, files, rows, plot_rows, endpoints, stems, elapsed)
     artifact_names = [
         "protocol.json",
         "files.json",

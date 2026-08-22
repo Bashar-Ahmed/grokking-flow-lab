@@ -57,8 +57,12 @@ uv pip install --python .venv/bin/python -e '.[plot]'
 .venv/bin/python scripts/plot_aligned_definitions.py \
   --raw-root flow-artifacts/raw-main-50k \
   --behavior-summary runs/selected_cells_seed0_2_epoch50000/behavior_summary.csv \
-  --output flow-artifacts/definition-aligned-plots --workers 12 --resume
+  --output flow-artifacts/definition-aligned-plots --workers 12 \
+  --min-source-epoch-exclusive 100 --resume
 ```
+
+The strict source-epoch filter removes initialization checkpoints at epochs 0--100
+from plots and endpoint summaries while retaining them in the raw derived data.
 
 ## Repository map
 

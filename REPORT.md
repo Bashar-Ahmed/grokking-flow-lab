@@ -318,6 +318,10 @@ five figures retains the source layout of addition, subtraction, and multiplicat
 panels, thin run traces, thick operation/split means, 95% mean-confidence bands, and a
 shared y-axis across operations.
 
+The displayed and summarized trajectories exclude source epochs 0--100 (that is,
+they require epoch >100). This removes sharp alignment artifacts caused by the dense
+initialization-checkpoint schedule; all extracted per-graph values remain preserved.
+
 Definition-03 is the only candidate whose available-run mean rises from −5,000 to
 +5,000 epochs for both train and test examples across all three operations. The other
 four candidates are task-dependent over the same window. Train and test agree on the
