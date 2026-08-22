@@ -5,6 +5,11 @@ import pytest
 from grokking_lab.definitions import (
     Graph,
     compute_definitions,
+    definition_01,
+    definition_02,
+    definition_03,
+    definition_04,
+    definition_05,
     graph_from_record,
     path_excess,
     safe_paths,
@@ -31,6 +36,14 @@ def test_definition_05_is_definition_04_without_length_weighting() -> None:
     assert values["definition_04"] == pytest.approx(5.8)
     assert values["definition_05"] == pytest.approx(2.6)
     assert 1 <= values["definition_05"] < values["definition_04"]
+
+
+def test_shared_path_computation_matches_individual_definitions() -> None:
+    graph = branching_graph()
+    combined = compute_definitions(graph)
+    functions = (definition_01, definition_02, definition_03, definition_04, definition_05)
+    for index, function in enumerate(functions, start=1):
+        assert combined[f"definition_{index:02d}"] == pytest.approx(function(graph))
 
 
 def test_safe_path_excess() -> None:

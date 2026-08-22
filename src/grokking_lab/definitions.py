@@ -114,6 +114,11 @@ def _eligible_path(graph: Graph, path: tuple[int, ...], nodes: set[int]) -> bool
     return any(graph.edges[left][1] in nodes for left, _ in pairwise(path))
 
 
+def _eligible_safe_paths(graph: Graph) -> list[tuple[int, ...]]:
+    nodes = _eligible_nodes(graph)
+    return [path for path in safe_paths(graph) if _eligible_path(graph, path, nodes)]
+
+
 def definition_01(graph: Graph) -> float:
     incoming_edges, outgoing_edges = graph.adjacency()
     incoming, _ = graph.node_values()
@@ -142,8 +147,7 @@ def _maximal(graph: Graph, paths: list[tuple[int, ...]]) -> list[tuple[int, ...]
 
 
 def definition_02(graph: Graph) -> float:
-    nodes = _eligible_nodes(graph)
-    paths = [path for path in safe_paths(graph) if _eligible_path(graph, path, nodes)]
+    paths = _eligible_safe_paths(graph)
     return sum(path_excess(graph, path) for path in _maximal(graph, paths)) / graph.value
 
 
@@ -180,9 +184,7 @@ def _can_cooccur(
     return False
 
 
-def definition_03(graph: Graph) -> float:
-    nodes = _eligible_nodes(graph)
-    candidates = [path for path in safe_paths(graph) if _eligible_path(graph, path, nodes)]
+def _definition_03_from_paths(graph: Graph, candidates: list[tuple[int, ...]]) -> float:
     ranked = sorted(
         ((path_excess(graph, path), path) for path in candidates),
         key=lambda item: (-item[0], item[1]),
@@ -197,25 +199,31 @@ def definition_03(graph: Graph) -> float:
     return total / graph.value
 
 
+def definition_03(graph: Graph) -> float:
+    return _definition_03_from_paths(graph, _eligible_safe_paths(graph))
+
+
 def definition_04(graph: Graph) -> float:
-    nodes = _eligible_nodes(graph)
-    paths = [path for path in safe_paths(graph) if _eligible_path(graph, path, nodes)]
+    paths = _eligible_safe_paths(graph)
     return (graph.value + sum(path_excess(graph, path) * len(path) for path in paths)) / graph.value
 
 
 def definition_05(graph: Graph) -> float:
-    nodes = _eligible_nodes(graph)
-    paths = [path for path in safe_paths(graph) if _eligible_path(graph, path, nodes)]
+    paths = _eligible_safe_paths(graph)
     return (graph.value + sum(path_excess(graph, path) for path in paths)) / graph.value
 
 
 def compute_definitions(graph: Graph) -> dict[str, float]:
+    paths = _eligible_safe_paths(graph)
     return {
         "definition_01": definition_01(graph),
-        "definition_02": definition_02(graph),
-        "definition_03": definition_03(graph),
-        "definition_04": definition_04(graph),
-        "definition_05": definition_05(graph),
+        "definition_02": sum(path_excess(graph, path) for path in _maximal(graph, paths))
+        / graph.value,
+        "definition_03": _definition_03_from_paths(graph, paths),
+        "definition_04": (graph.value + sum(path_excess(graph, path) * len(path) for path in paths))
+        / graph.value,
+        "definition_05": (graph.value + sum(path_excess(graph, path) for path in paths))
+        / graph.value,
     }
 
 
