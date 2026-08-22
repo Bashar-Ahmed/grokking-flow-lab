@@ -156,7 +156,8 @@ analyze a trained checkpoint and do not constitute the paused flow experiment.
 Completed on the RTX 5060 Ti instance:
 
 - lint and formatting checks passed;
-- 21 unit tests passed, including post-hoc/source-isolation coverage;
+- 23 unit tests passed, including post-hoc/source isolation and exact serial/parallel
+  flow-extraction equivalence coverage;
 - smoke training completed 20 epochs for add, sub, and mul;
 - 21/21 immutable checkpoints matched their SHA-256 manifests and reloaded with
   `weights_only=True`;
@@ -240,3 +241,32 @@ resolution, totaling 912,991,079 bytes. All checkpoint hashes passed verificatio
 and the recorded pre/post hashes of the 100,000-epoch source artifact and aggregate
 main-study summary are identical. Flow extraction was not run. Detailed results are
 in `runs/posthoc/sub_frac0p25_wd1_seed1_to200000/`.
+
+## 11. Lossless raw-flow extraction optimization
+
+The raw extractor was optimized before the full flow phase. The numerical
+decomposition, node catalog, edge aggregation, canonical-path ordering, and record
+schema are unchanged. In particular, every successful or degenerate record retains an
+explicit `split` value of `train` or `test`.
+
+The optimized implementation performs one model forward pass per example and reuses
+its immutable cache across the four flow kinds. The original implementation performed
+five forward passes per example: one to choose the competitor and one inside each flow
+construction. Independent checkpoints can now be processed by multiple CPU processes;
+each worker reuses one model instance and is restricted to one PyTorch thread to avoid
+oversubscription. Output files use deterministic gzip headers, are written atomically,
+and are recorded in an incrementally updated SHA-256 manifest. Interrupted extractions
+can resume only when the existing provenance manifest exactly matches the request.
+Every source checkpoint is digest-checked before it is loaded.
+
+Regression tests establish exact equality between cached and uncached `RawFlow`
+objects and byte-for-byte equality between serial and parallel compressed artifacts.
+A direct comparison against the pre-optimization Git version also produced exact
+edge/path equality for all 16 checked flows from four train/test examples at a real
+epoch-11,700 checkpoint.
+A real 128-width, 512-MLP benchmark measured approximately 33 records/second with one
+optimized CPU worker, versus 22 records/second previously. Twelve workers processed 60
+checkpoints at approximately 256 records/second including process startup. At that
+observed rate, the proposed 876,096-record main matrix would take roughly 57 minutes.
+Benchmark outputs were temporary and deleted. No full raw-flow extraction or numbered
+definition calculation was run as part of this optimization.

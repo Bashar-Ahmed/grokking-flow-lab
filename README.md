@@ -23,7 +23,7 @@ After approval, the two offline phases are:
 ```bash
 .venv/bin/grokking-lab extract-flows \
   --run runs/<sweep>/<run-id> --output flow-artifacts/raw \
-  --device cpu --acknowledge-phase-gate
+  --device cpu --workers 12 --resume --acknowledge-phase-gate
 
 .venv/bin/grokking-lab summarize \
   --raw-run flow-artifacts/raw/<run-id> \

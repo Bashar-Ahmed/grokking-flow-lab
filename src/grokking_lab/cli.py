@@ -35,6 +35,9 @@ def _parser() -> argparse.ArgumentParser:
     extract.add_argument("--run", type=Path, required=True)
     extract.add_argument("--output", type=Path, required=True)
     extract.add_argument("--device", default="cpu")
+    extract.add_argument("--workers", type=int, default=1)
+    extract.add_argument("--resume", action="store_true")
+    extract.add_argument("--compression-level", type=int, default=6)
     extract.add_argument("--acknowledge-phase-gate", action="store_true", required=True)
 
     summarize = commands.add_parser("summarize", help="compute numbered definitions")
@@ -95,7 +98,14 @@ def main(argv: list[str] | None = None) -> None:
             )
         train_sweep(config, args.output, args.device)
     elif args.command == "extract-flows":
-        extract_run(args.run, args.output, args.device)
+        extract_run(
+            args.run,
+            args.output,
+            args.device,
+            args.workers,
+            args.resume,
+            args.compression_level,
+        )
     elif args.command == "summarize":
         summarize_raw_run(args.raw_run, args.output)
     elif args.command == "report-behavior":
