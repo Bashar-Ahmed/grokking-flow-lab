@@ -3,8 +3,8 @@
 ## Status
 
 Repository scaffolding and implementation are complete. The nine-cell, three-seed,
-50,000-epoch behavior-only training matrix is complete. No trained-checkpoint flow
-extraction or numbered-definition analysis has been run.
+50,000-epoch behavior-only training matrix and its raw-flow extraction are complete.
+No numbered-definition analysis has been run.
 
 ## 1. What is being reproduced
 
@@ -138,13 +138,14 @@ source-study cells, seeds 0--2, and 50,000 epochs: 27 runs, 1,350,000 optimizer 
 13,689 checkpoints (about 11.6 GiB of weights before serialization overhead), and
 876,096 possible raw graphs. This keeps the finer 100-epoch temporal resolution.
 
-The 27-run training scope was approved on 22 August 2026. Flow extraction remains a
-separate unapproved phase.
+The 27-run training scope was approved on 22 August 2026. Full raw-flow extraction was
+approved separately after optimization validation; numbered-definition analysis
+remains a separate phase.
 
-Before the flow phase, separately confirm checkpoint subset, examples per split, and
-the Hugging Face dataset destination. `/workspace` is not volume-backed on this
-instance, so approved valuable artifacts should be uploaded before instance recycle or
-destruction.
+The full checkpoint subset and eight examples per split were subsequently confirmed.
+The Hugging Face dataset destination remains unconfigured. `/workspace` is not
+volume-backed on this instance, so these artifacts should be uploaded before instance
+recycle or destruction.
 
 ## 7. Validation record
 
@@ -167,8 +168,9 @@ Completed on the RTX 5060 Ti instance:
 - as expected, this 20-epoch plumbing run did not grok and supports no scientific
   conclusion;
 - the unconfirmed large-run command was tested and refused execution;
-- no `flow-artifacts` directory exists, and all run protocols retain flow status
-  `not_run`.
+- at the original phase gate, no `flow-artifacts` directory existed and all run
+  protocols retained flow status `not_run`; the later offline extraction is reported
+  in Section 12 without mutating those frozen training protocols.
 
 ## 8. Completed 50,000-epoch behavior matrix
 
@@ -272,4 +274,25 @@ original extractor measured 22 records/second. At the observed parallel rate, th
 proposed 876,096-record matrix would take roughly 33 minutes. A 60-checkpoint sample
 averaged 1.28 MB compressed per checkpoint, projecting about 16.3 GiB for the matrix.
 Benchmark outputs were temporary and deleted. No full raw-flow extraction or numbered
-definition calculation was run as part of this optimization.
+definition calculation was run as part of the optimization itself.
+
+## 12. Completed raw-flow extraction
+
+After the optimized method and scale were confirmed, raw flows were extracted for all
+27 main-study runs and all 507 checkpoints per run. Each checkpoint uses eight fixed
+training examples, eight fixed test examples, and four polarity/objective flow kinds.
+The separate post-hoc continuations were excluded, and no numbered definition was
+computed.
+
+The completed artifact contains 13,689 compressed checkpoint files and 876,096 raw
+records. The explicit split label is exactly balanced: 438,048 records have
+`split="train"` and 438,048 have `split="test"`. Each flow kind has 219,024 records.
+There are 876,036 nondegenerate flows and 60 explicitly stored degenerate records.
+The compressed checkpoint payload totals 17,880,683,014 bytes.
+
+All 13,689 file hashes match their incremental manifests. An independent 12-worker
+streaming audit parsed every record and passed checks for provenance, schema, split
+assignment, record completeness, scale, path/source/sink normalization, edge topology,
+nonnegativity, and internal conservation. The extraction took approximately 26
+minutes. The detailed Markdown report and machine-readable audit are in
+`flow-artifacts/raw-main-50k/REPORT.md` and `AUDIT.json`.
