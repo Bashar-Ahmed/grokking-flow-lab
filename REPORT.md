@@ -156,7 +156,7 @@ analyze a trained checkpoint and do not constitute the paused flow experiment.
 Completed on the RTX 5060 Ti instance:
 
 - lint and formatting checks passed;
-- 20 unit tests passed in 2.81 seconds;
+- 21 unit tests passed, including post-hoc/source-isolation coverage;
 - smoke training completed 20 epochs for add, sub, and mul;
 - 21/21 immutable checkpoints matched their SHA-256 manifests and reloaded with
   `weights_only=True`;
@@ -191,3 +191,27 @@ late transitions from one still-censored run.
 The complete plain-language behavior report and machine-readable table are stored in
 `runs/selected_cells_seed0_2_epoch50000/REPORT.md` and `behavior_summary.csv`. These
 results are behavioral only. Flow status remains `not_run` for every protocol.
+
+## 9. Purely post-hoc 50,000-to-100,000 extension
+
+After inspecting the completed main matrix, the sole censored run,
+`sub_frac0p25_wd1_seed1`, was resumed from its epoch-50,000 optimizer and scheduler
+state to epoch 100,000. This was an exploratory follow-up, not a modification of the
+approved 27-run study. It lives under `runs/posthoc/`, carries the machine-readable
+status `POST_HOC_DO_NOT_POOL_WITH_MAIN_STUDY`, and must not be pooled into the main
+results above.
+
+The run did not grok by epoch 100,000. Training accuracy was 1.000 at the endpoint;
+test accuracy rose from 0.028923 at epoch 50,000 to 0.102120 at epoch 100,000. Its
+highest saved test accuracy was 0.102433 at epoch 99,800, still far below the frozen
+0.90 threshold. The trajectory therefore shows gradual improvement over this horizon,
+not a behavioral grokking transition.
+
+The isolated artifact contains 501 checkpoints at 100-epoch resolution (the copied
+source checkpoint plus 500 continuation checkpoints), totaling 456,951,579 bytes.
+Every checkpoint passed a fresh SHA-256 manifest verification. Pre/post hashes of the
+source protocol, metrics, checkpoint manifest, latest state, and aggregate main-study
+summary are identical. Flow extraction was not run.
+
+The detailed post-hoc report, metrics, provenance, and checkpoint manifest are in
+`runs/posthoc/sub_frac0p25_wd1_seed1_to100000/`.

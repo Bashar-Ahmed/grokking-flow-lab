@@ -41,7 +41,9 @@ def _report(
         ),
         None,
     )
+    initial = history[0]
     final = history[-1]
+    best = max(history, key=lambda row: row["test_accuracy"])
     result = (
         f"The run first crossed the behavioral grokking threshold at epoch {grokking}."
         if grokking is not None
@@ -69,6 +71,8 @@ registered outcomes. The source run remains unchanged and is referenced by SHA-2
 
 - Final training accuracy: {final["train_accuracy"]:.6f}.
 - Final test accuracy: {final["test_accuracy"]:.6f}.
+- Best test accuracy: {best["test_accuracy"]:.6f} at epoch {int(best["epoch"])}.
+- Test accuracy at the source checkpoint: {initial["test_accuracy"]:.6f}.
 
 The threshold is the first saved checkpoint with training accuracy at least 0.99 and
 test accuracy at least 0.90. This result is descriptive and post-hoc.
