@@ -44,3 +44,24 @@ def test_nested_candidate_selection_does_not_use_outer_group() -> None:
         lambda row: str(row["group"]),
     )
     assert {row["selected_candidate"] for row in predictions} == {"useful"}
+
+
+def test_nested_selection_can_use_inner_settings_for_two_outer_operations() -> None:
+    rows = [
+        {
+            "run_id": f"{operation}-{cell}",
+            "operation": operation,
+            "cell": f"{operation}-{cell}",
+            "target_log10_g": float(target),
+            "signal": float(target),
+        }
+        for operation, targets in (("add", (1, 2)), ("mul", (3, 4)))
+        for cell, target in enumerate(targets)
+    ]
+    predictions = nested_candidate_predictions(
+        rows,
+        {"candidate": ["signal"]},
+        lambda row: str(row["operation"]),
+        inner_group_of=lambda row: str(row["cell"]),
+    )
+    assert len(predictions) == 4

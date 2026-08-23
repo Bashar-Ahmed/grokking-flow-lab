@@ -72,17 +72,21 @@ def nested_candidate_predictions(
     candidates: dict[str, list[str]],
     group_of: Callable[[dict[str, Any]], str],
     regularization: float = 1.0,
+    inner_group_of: Callable[[dict[str, Any]], str] | None = None,
 ) -> list[dict[str, Any]]:
     """Choose a candidate by inner grouped CV, then predict each outer group."""
 
     output = []
+    selection_group_of = inner_group_of or group_of
     outer_groups = [group_of(row) for row in rows]
     for outer_group in sorted(set(outer_groups)):
         train_rows = [row for row in rows if group_of(row) != outer_group]
         held_rows = [row for row in rows if group_of(row) == outer_group]
         inner_mae = {}
         for name, features in candidates.items():
-            predictions = grouped_predictions(train_rows, features, group_of, regularization)
+            predictions = grouped_predictions(
+                train_rows, features, selection_group_of, regularization
+            )
             inner_mae[name] = float(np.mean([row["absolute_error"] for row in predictions]))
         selected = min(inner_mae, key=lambda name: (inner_mae[name], name))
         feature_names = candidates[selected]

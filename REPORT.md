@@ -349,3 +349,8 @@ The nested Safe-Mass predictor reduces error relative to typical timing from 0.3
 0.316 for a new seed and from 0.361 to 0.346 for a new hyperparameter setting. It does
 not transfer across arithmetic operations: error rises from 0.317 to 0.370. Thus the
 result is a modest within-setting signal, not a task-general grokking forecaster.
+
+A second sensitivity figure restricts the comparison to the 12 eligible addition and
+multiplication runs. Safe-Mass is close to typical timing for new seeds and direct
+addition-to-multiplication transfer, but is worse on held-out hyperparameter settings;
+there is no consistent commutative-only advantage.

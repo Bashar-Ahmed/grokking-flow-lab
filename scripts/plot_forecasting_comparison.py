@@ -183,7 +183,11 @@ def _run_features(
     return sorted(output, key=lambda row: str(row["run_id"]))
 
 
-def _evaluate(rows: list[dict[str, Any]], regularization: float) -> tuple[list, list]:
+def _evaluate(
+    rows: list[dict[str, Any]],
+    regularization: float,
+    inner_group_overrides: dict[str, Any] | None = None,
+) -> tuple[list, list]:
     metrics = []
     all_predictions = []
     for fold, group_of in FOLDS.items():
@@ -203,7 +207,11 @@ def _evaluate(rows: list[dict[str, Any]], regularization: float) -> tuple[list, 
             )
             all_predictions.extend({"fold": fold, "method": method, **row} for row in predictions)
         predictions = nested_candidate_predictions(
-            rows, SAFE_MASS_CANDIDATES, group_of, regularization=regularization
+            rows,
+            SAFE_MASS_CANDIDATES,
+            group_of,
+            regularization=regularization,
+            inner_group_of=(inner_group_overrides or {}).get(fold),
         )
         errors = [float(row["absolute_error"]) for row in predictions]
         metrics.append(
@@ -221,7 +229,17 @@ def _evaluate(rows: list[dict[str, Any]], regularization: float) -> tuple[list, 
     return metrics, all_predictions
 
 
-def _plot(metrics: list[dict[str, Any]], output: Path, run_count: int, points: int) -> None:
+def _plot(
+    metrics: list[dict[str, Any]],
+    output: Path,
+    run_count: int,
+    points: int,
+    *,
+    stem: str = "forecasting_comparison",
+    title: str = "Forecasting grokking from pre-generalization checkpoints",
+    subtitle: str = "Safe-Mass helps within settings, but not across operations",
+    operation_fold_label: str = "New arithmetic\noperation",
+) -> None:
     import matplotlib as mpl
     import matplotlib.pyplot as plt
 
@@ -240,7 +258,7 @@ def _plot(metrics: list[dict[str, Any]], output: Path, run_count: int, points: i
     fold_labels = (
         "Same setting,\nnew seed",
         "New hyperparameter\nsetting",
-        "New arithmetic\noperation",
+        operation_fold_label,
     )
     methods = (*METHODS, "safe_mass_nested")
     method_labels = {
@@ -287,14 +305,14 @@ def _plot(metrics: list[dict[str, Any]], output: Path, run_count: int, points: i
         frameon=False,
     )
     figure.suptitle(
-        "Forecasting grokking from pre-generalization checkpoints",
+        title,
         y=0.98,
         fontweight="bold",
     )
     figure.text(
         0.5,
         0.90,
-        "Safe-Mass helps within settings, but not across operations",
+        subtitle,
         ha="center",
         fontsize=11,
     )
@@ -309,8 +327,8 @@ def _plot(metrics: list[dict[str, Any]], output: Path, run_count: int, points: i
         color="#555B65",
     )
     figure.tight_layout(rect=(0, 0.08, 1, 0.78))
-    figure.savefig(output / "forecasting_comparison.png", bbox_inches="tight", facecolor="white")
-    figure.savefig(output / "forecasting_comparison.pdf", bbox_inches="tight", facecolor="white")
+    figure.savefig(output / f"{stem}.png", bbox_inches="tight", facecolor="white")
+    figure.savefig(output / f"{stem}.pdf", bbox_inches="tight", facecolor="white")
     plt.close(figure)
 
 
@@ -318,6 +336,7 @@ def _report(
     output: Path,
     protocol: dict[str, Any],
     metrics: list[dict[str, Any]],
+    commutative_metrics: list[dict[str, Any]],
     excluded: list[str],
     elapsed: float,
 ) -> None:
@@ -349,6 +368,24 @@ def _report(
     operation_change = (
         lookup[("new_operation", "safe_mass_nested")] / lookup[("new_operation", "typical_timing")]
         - 1
+    )
+    commutative_lookup = {
+        (str(row["fold"]), str(row["method"])): float(row["mae_log10_grokking_epoch"])
+        for row in commutative_metrics
+    }
+    commutative_table = "\n".join(
+        "| {label} | {mean:.3f} | {weight:.3f} | {fourier:.3f} | {safe:.3f} |".format(
+            label=label,
+            mean=commutative_lookup[(fold, "typical_timing")],
+            weight=commutative_lookup[(fold, "weight_norm")],
+            fourier=commutative_lookup[(fold, "fourier_progress")],
+            safe=commutative_lookup[(fold, "safe_mass_nested")],
+        )
+        for fold, label in (
+            ("new_seed", "Same setting, new seed"),
+            ("new_setting", "New hyperparameter setting"),
+            ("new_operation", "Addition ↔ multiplication"),
+        )
     )
     (output / "REPORT.md").write_text(
         f"""# Pre-generalization grokking-time forecasting
@@ -388,6 +425,24 @@ in a represented setting and {setting_gain:.1%} for a held-out hyperparameter se
 It increases error by {operation_change:.1%} for a held-out arithmetic operation. It
 beats the weight-norm and Fourier forecasters in all three comparisons, but does not
 beat the no-signal timing baseline when transferring to a new operation.
+
+## Commutative-only comparison
+
+This sensitivity view repeats the frozen evaluation using only the 12 eligible
+addition and multiplication runs. For direct operation transfer, Safe-Mass candidate
+selection uses leave-one-setting-out validation within the training operation; the
+held-out operation remains untouched.
+
+| Held-out case | Typical timing | Weight norm | Fourier progress | Safe-Mass |
+|---|---:|---:|---:|---:|
+{commutative_table}
+
+[PNG](forecasting_comparison_commutative.png) ·
+[PDF](forecasting_comparison_commutative.pdf)
+
+Safe-Mass shows no consistent advantage in this smaller subset. It is close to the
+typical-timing baseline for a new seed and for addition-to-multiplication transfer,
+but is worse for a held-out hyperparameter setting.
 
 ## Scope and caveats
 
@@ -450,6 +505,8 @@ def main() -> None:
         "ridge_lambda": args.ridge_lambda,
         "evaluable_runs": len(runs),
         "forecast_models": ("equal_complexity_last_and_slope_with_nested_safe_mass_selection"),
+        "commutative_sensitivity_operations": ["add", "mul"],
+        "commutative_operation_transfer_inner_group": "cell",
         "checkpoint_tasks": len(tasks),
         "source_behavior_summary_sha256": sha256(args.behavior_summary),
         "source_raw_audit_sha256": sha256(args.raw_root / "AUDIT.json"),
@@ -486,8 +543,26 @@ def main() -> None:
     _write_csv(args.output / "fold_metrics.csv", metrics)
     _write_csv(args.output / "held_out_predictions.csv", predictions)
     _plot(metrics, args.output, len(runs), args.window_checkpoints)
+    commutative_rows = [row for row in run_rows if row["operation"] in ("add", "mul")]
+    commutative_metrics, commutative_predictions = _evaluate(
+        commutative_rows,
+        args.ridge_lambda,
+        inner_group_overrides={"new_operation": lambda row: str(row["cell"])},
+    )
+    _write_csv(args.output / "fold_metrics_commutative.csv", commutative_metrics)
+    _write_csv(args.output / "held_out_predictions_commutative.csv", commutative_predictions)
+    _plot(
+        commutative_metrics,
+        args.output,
+        len(commutative_rows),
+        args.window_checkpoints,
+        stem="forecasting_comparison_commutative",
+        title="Forecasting grokking within commutative arithmetic",
+        subtitle="Addition and multiplication only: no consistent Safe-Mass advantage",
+        operation_fold_label="Addition ↔ multiplication\ntransfer",
+    )
     elapsed = max(previous_elapsed, time.perf_counter() - started)
-    _report(args.output, protocol, metrics, excluded, elapsed)
+    _report(args.output, protocol, metrics, commutative_metrics, excluded, elapsed)
     result = {
         "schema_version": 1,
         "status": "passed",
@@ -495,6 +570,8 @@ def main() -> None:
         "checkpoint_features": len(checkpoint_rows),
         "elapsed_seconds": elapsed,
         "fold_metrics": metrics,
+        "commutative_evaluable_runs": len(commutative_rows),
+        "commutative_fold_metrics": commutative_metrics,
     }
     write_json(args.output / "RESULT.json", result)
     names = [
@@ -505,8 +582,12 @@ def main() -> None:
         "run_features.csv",
         "fold_metrics.csv",
         "held_out_predictions.csv",
+        "fold_metrics_commutative.csv",
+        "held_out_predictions_commutative.csv",
         "forecasting_comparison.png",
         "forecasting_comparison.pdf",
+        "forecasting_comparison_commutative.png",
+        "forecasting_comparison_commutative.pdf",
     ]
     write_json(
         args.output / "OUTPUT_MANIFEST.json",
