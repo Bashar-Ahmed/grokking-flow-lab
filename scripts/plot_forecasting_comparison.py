@@ -247,7 +247,7 @@ def _plot(metrics: list[dict[str, Any]], output: Path, run_count: int, points: i
         "typical_timing": "Typical timing",
         "weight_norm": "Weight-norm dynamics",
         "fourier_progress": "Fourier-structure progress",
-        "safe_mass_nested": "Safe-Mass (nested selection)",
+        "safe_mass_nested": "Safe-Mass",
     }
     colors = {
         "typical_timing": "#C9CDD3",
