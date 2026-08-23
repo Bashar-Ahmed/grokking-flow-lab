@@ -1,0 +1,16 @@
+fold,definition,held_out_groups_selecting,held_out_groups_total
+new_seed,definition_01,0,19
+new_seed,definition_02,0,19
+new_seed,definition_03,0,19
+new_seed,definition_04,19,19
+new_seed,definition_05,0,19
+new_setting,definition_01,0,7
+new_setting,definition_02,0,7
+new_setting,definition_03,0,7
+new_setting,definition_04,7,7
+new_setting,definition_05,0,7
+new_operation,definition_01,0,3
+new_operation,definition_02,1,3
+new_operation,definition_03,0,3
+new_operation,definition_04,1,3
+new_operation,definition_05,1,3

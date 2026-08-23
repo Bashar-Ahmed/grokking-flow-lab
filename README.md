@@ -75,11 +75,20 @@ and the numbered Safe-Mass family can be reproduced with:
   --output flow-artifacts/forecasting-comparison --workers 12 --resume
 ```
 
+Reviewer-facing figures and their exact plotted values are collected separately in
+`application-addendum/`. Rebuild the directory from the completed artifacts with:
+
+```bash
+.venv/bin/python scripts/build_application_addendum.py \
+  --output application-addendum
+```
+
 ## Repository map
 
 ```text
 configs/                 smoke config and gated scale proposal
 scripts/bootstrap.sh     reuse the instance's Blackwell-compatible PyTorch
+application-addendum/    compact MATS-ready figures, PDFs, plotted CSVs, and manifest
 src/grokking_lab/        model, training, raw flow, numbered definitions, CLI
 tests/                   dataset/model, checkpoint, flow, and formula tests
 REPORT.md                plain-language research and execution report

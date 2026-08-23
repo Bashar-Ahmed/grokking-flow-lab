@@ -354,3 +354,20 @@ A second sensitivity figure restricts the comparison to the 12 eligible addition
 multiplication runs. Safe-Mass is close to typical timing for new seeds and direct
 addition-to-multiplication transfer, but is worse on held-out hyperparameter settings;
 there is no consistent commutative-only advantage.
+
+## 15. Application visual addendum
+
+The separate `application-addendum/` directory packages eight reviewer-facing views:
+experiment coverage, numbered-definition consistency, forecast calibration,
+train/test agreement, observation-window sensitivity, candidate-selection stability,
+the isolated censored-run continuation, and the study pipeline. Each numeric figure
+has both PNG/PDF output and a CSV containing exactly the plotted values; a SHA-256
+manifest covers the complete directory.
+
+The addendum is intentionally candid about scope. Definition-03 is the only candidate
+that rises in every evaluable operation/split run in the fixed local windows, and its
+train/test changes are strongly associated (Pearson correlation 0.959 across 20 runs).
+However, forecast performance changes materially with the number of observed
+checkpoints, and nested candidate selection is stable for new seeds/settings but not
+new operations. The visual sequence therefore separates the structural observation
+from the weaker, post-hoc forecasting claim.
