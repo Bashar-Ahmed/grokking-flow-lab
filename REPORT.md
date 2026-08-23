@@ -333,3 +333,19 @@ Five PNG/PDF pairs, per-graph values, split-specific trajectory data, endpoint m
 and a detailed Markdown report are stored in
 `flow-artifacts/definition-aligned-plots/`. The initial full computation and plotting
 took 38.2 minutes with 12 CPU workers.
+
+## 14. Post-hoc forecasting comparison
+
+The repository also contains a grouped held-out comparison between typical timing,
+weight-norm dynamics, operation-matched Fourier progress, and Safe-Mass. It uses the
+last four checkpoints after epoch 100 and before test accuracy first exceeds 10%, with
+Safe-Mass calculated from training examples only. One of Definition-01--05 is selected
+inside each training fold, so the held-out group does not influence candidate choice.
+This is explicitly post-hoc screening rather than a preregistered or deployable
+forecast. Results and limitations are reported under
+`flow-artifacts/forecasting-comparison/`.
+
+The nested Safe-Mass predictor reduces error relative to typical timing from 0.334 to
+0.316 for a new seed and from 0.361 to 0.346 for a new hyperparameter setting. It does
+not transfer across arithmetic operations: error rises from 0.317 to 0.370. Thus the
+result is a modest within-setting signal, not a task-general grokking forecaster.

@@ -64,6 +64,17 @@ uv pip install --python .venv/bin/python -e '.[plot]'
 The strict source-epoch filter removes initialization checkpoints at epochs 0--100
 from plots and endpoint summaries while retaining them in the raw derived data.
 
+The post-hoc comparison of conventional pre-generalization signals, Fourier progress,
+and the numbered Safe-Mass family can be reproduced with:
+
+```bash
+.venv/bin/python scripts/plot_forecasting_comparison.py \
+  --runs-root runs/selected_cells_seed0_2_epoch50000 \
+  --raw-root flow-artifacts/raw-main-50k \
+  --behavior-summary runs/selected_cells_seed0_2_epoch50000/behavior_summary.csv \
+  --output flow-artifacts/forecasting-comparison --workers 12 --resume
+```
+
 ## Repository map
 
 ```text
